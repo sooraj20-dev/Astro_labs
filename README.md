@@ -121,8 +121,8 @@ Open `http://localhost:5173` in your browser and grant camera access when prompt
 ---
 
 ## Team Contributions
-- **SHAMILA:** Project ideation, UX/UI theme design (Neo-Brutalist Kerala altar aesthetic), content copywriting for Malayalam astrologer prophecies and pariharams.
-- **SOORAJ K:** Core computer vision integration with Google MediaPipe, real-time landmark/blendshape classifier algorithms, and React architecture.
+- **SHAMILA:** Mentoring
+- **SOORAJ K:** Project ideation, UX/UI theme design (Neo-Brutalist Kerala altar aesthetic), content copywriting for Malayalam astrologer prophecies and pariharams.Core computer vision integration with Google MediaPipe, real-time landmark/blendshape classifier algorithms, and React architecture.
 - **AKSHAY V:** Audio engine integration with Web Audio API, canvas card generation for social sharing, responsive layout optimization, and testing.
 
 ---
