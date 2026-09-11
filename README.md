@@ -107,11 +107,11 @@ Open `http://localhost:5173` in your browser and grant camera access when prompt
 ## Project Demo
 
 ### Video
-[![Demo Video](src/assets/Astro/outputs/s1.png)](src/assets/Astro/outputs/op.mp4)
 
-▶️ **[Click here to watch / download the demo video (`op.mp4`)](src/assets/Astro/outputs/op.mp4)**
+![Astro Lab Live Demo](src/assets/Astro/outputs/demo.gif)
 
-<video src="src/assets/Astro/outputs/op.mp4" controls="controls" width="100%"></video>
+🎬 **[Watch / Download Demo Video (Fast-Streaming MP4)](src/assets/Astro/outputs/demo.mp4)**  
+*(Also available in [Original HD Format](src/assets/Astro/outputs/op.mp4))*
 
 *The video demonstrates entering the Astro Lab chamber, selecting an astrologer, running live facial landmark detection, triggering voice lines, and generating the customized Jathakam verdict.*
 
