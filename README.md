@@ -78,17 +78,14 @@ Open `http://localhost:5173` in your browser and grant camera access when prompt
 ### For Software:
 
 #### Screenshots (Add at least 3)
-![Screenshot1](<img width="1917" height="905" alt="image" src="https://github.com/user-attachments/assets/77fb0cfe-ea87-4ebc-b6f3-482236757bff" />
-)  
+![Screenshot1](src/assets/Astro/outputs/s1.png)  
 *Screenshot 1: The Antique Kerala Altar Chamber featuring live Astrologer selection (Unni Namboothiri, Kumbidi, Yeshu) and the rotating cosmic zodiac wheel.*
 
-![Screenshot2](<img width="1917" height="846" alt="image" src="https://github.com/user-attachments/assets/9f05457f-76ba-4271-914b-f3895b9b310e" />
-)  
-*Screenshot 2: Real-time computer vision analysis tracking facial landmarks, calculating smile power, and evaluating cosmic energy.*
+![Screenshot2](src/assets/Astro/outputs/s2.png)  
+*Screenshot 2: Real-time computer vision analysis tracking facial landmarks, smile detection, face archetype ("ടാബ് ഹോൾഡർ"), and Kumbidi's custom prophecy.*
 
-![Screenshot3](<img width="987" height="773" alt="image" src="https://github.com/user-attachments/assets/d6b08d82-c81e-44ee-91d9-47ba801193a2" />
-)  
-*Screenshot 3: Official Jathakam Verdict Card displaying humorous doshams, future prophecies, absurd remedies, and downloadable social share card.*
+![Screenshot3](src/assets/Astro/outputs/s3.png)  
+*Screenshot 3: Official Jathakam Verdict Card displaying humorous doshams ("പ്രൊക്രാസ്റ്റിനേഷൻ ദോഷം"), career/wealth forecasts, and absurd pariharams.*
 
 #### Diagrams
 ```
