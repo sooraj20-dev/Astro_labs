@@ -126,8 +126,16 @@ export function playMockAlertSound(intensity: 'mild' | 'medium' | 'extreme' = 'm
 /**
  * Fallback Web Speech API when offline
  */
-function fallbackSpeechSynthesis(malayalam: string, transliteration?: string): void {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+function fallbackSpeechSynthesis(
+  malayalam: string,
+  transliteration?: string,
+  onStart?: () => void,
+  onEnd?: () => void
+): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    onEnd?.();
+    return;
+  }
 
   try {
     window.speechSynthesis.resume();
@@ -168,16 +176,106 @@ function fallbackSpeechSynthesis(malayalam: string, transliteration?: string): v
     utterance.pitch = 1.05;
     utterance.volume = 1.0;
 
+    utterance.onstart = () => {
+      onStart?.();
+    };
+
     utterance.onend = () => {
       activeUtterance = null;
+      onEnd?.();
     };
+
     utterance.onerror = () => {
       activeUtterance = null;
+      onEnd?.();
     };
 
     window.speechSynthesis.speak(utterance);
   } catch {
-    // Ignore
+    onEnd?.();
+  }
+}
+
+/**
+ * Speak dialogue as astrologer Unni Namboothiri in natural, fluent Malayalam.
+ */
+export function speakUnniDialogue(
+  malayalamText: string,
+  onStart?: () => void,
+  onEnd?: () => void
+): void {
+  if (!malayalamText || typeof window === 'undefined') {
+    onEnd?.();
+    return;
+  }
+
+  // Stop any previous speech or audio
+  stopUnniVoice();
+
+  // Clean the text: remove "ഉണ്ണി നമ്പൂതിരി:", quotes, emojis
+  const cleanText = malayalamText
+    .replace(/ഉണ്ണി\s*നമ്പൂതിരി\s*:/gi, '')
+    .replace(/[🎙🔮⚠🌿💰💼❤👁✨]/gu, '')
+    .replace(/["'""'']/g, '')
+    .trim();
+
+  if (!cleanText) {
+    onEnd?.();
+    return;
+  }
+
+  // 1. Try High-Definition Native Malayalam Audio Stream
+  try {
+    const ttsUrl = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=ml&q=${encodeURIComponent(cleanText)}`;
+    const audio = new Audio();
+    activeAudioElement = audio;
+    audio.crossOrigin = 'anonymous';
+    audio.src = ttsUrl;
+    audio.volume = 1.0;
+
+    audio.onplay = () => {
+      onStart?.();
+    };
+
+    audio.onended = () => {
+      activeAudioElement = null;
+      onEnd?.();
+    };
+
+    audio.onerror = () => {
+      activeAudioElement = null;
+      fallbackSpeechSynthesis(cleanText, undefined, onStart, onEnd);
+    };
+
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => onStart?.())
+        .catch(() => {
+          fallbackSpeechSynthesis(cleanText, undefined, onStart, onEnd);
+        });
+    }
+  } catch {
+    fallbackSpeechSynthesis(cleanText, undefined, onStart, onEnd);
+  }
+}
+
+export function stopUnniVoice(): void {
+  if (activeAudioElement) {
+    try {
+      activeAudioElement.pause();
+      activeAudioElement.currentTime = 0;
+    } catch {
+      // Ignore
+    }
+    activeAudioElement = null;
+  }
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      // Ignore
+    }
   }
 }
 

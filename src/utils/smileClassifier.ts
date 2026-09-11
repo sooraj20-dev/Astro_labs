@@ -50,22 +50,3 @@ export function formatBrutalistProgressBar(score: number, totalBlocks: number = 
   const emptyBlocks = totalBlocks - filledBlocks;
   return '█'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
 }
-
-/**
- * Legacy compatibility stub
- */
-export interface InvestigationStatus {
-  headline: string;
-  subtext: string;
-  threatLevel: string;
-  badgeColor: string;
-}
-
-export function getInvestigationStatus(..._args: any[]): InvestigationStatus {
-  return {
-    headline: 'CHIRI ACTIVE',
-    subtext: 'WHY ARE YOU SMILING?',
-    threatLevel: 'ACTIVE',
-    badgeColor: 'bg-black text-white',
-  };
-}

@@ -1,466 +1,397 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSmileStore } from '@/store/useSmileStore';
-import {
-  unlockMobileAudio,
-  playCameraShutterSound,
-} from '@/utils/mockVoice';
-import {
-  Volume2,
-  VolumeX,
-  Sparkles,
-  X,
-  ArrowRight,
-} from 'lucide-react';
-import introSmileAudio from '@/assets/videos/intro_smile.mp3';
+import { unlockMobileAudio } from '@/utils/mockVoice';
+import { ArrowRight, Film, Sparkles, Star, Zap } from 'lucide-react';
+import { ASTROLOGERS, AstrologerId } from '@/data/jyothishamData';
+import { UnniAvatar } from '@/components/UnniAvatar';
+import { stopAstroIntroAudio } from '@/utils/astroAudio';
+import zodiacWheelImg from '@/assets/Astro/zodiac_wheel.jpg';
+import altarTableImg from '@/assets/Astro/altar_table.png';
 
 interface LandingScreenProps {
   onStartCamera: () => void;
 }
 
-export const LandingScreen: React.FC<LandingScreenProps> = ({ onStartCamera }) => {
-  const { landingOpen, setLandingOpen, cameraEnabled } = useSmileStore();
+const ASTROLOGER_IDS: AstrologerId[] = ['unni', 'kumbidi', 'yeshu'];
 
-  const [progress, setProgress] = useState<number>(0);
-  const [loadingMessageMl, setLoadingMessageMl] = useState<string>('തയ്യാറെടുക്കുന്നു...');
-  const [loadingMessageEn, setLoadingMessageEn] = useState<string>('Preparing challenge...');
-  const [isFlashing, setIsFlashing] = useState<boolean>(false);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [waitingForTap, setWaitingForTap] = useState<boolean>(false);
+// Typewriter hook for punchy Malayalam taglines
+function useTypewriter(texts: string[], speed = 55, pause = 2200) {
+  const [display, setDisplay] = useState('');
+  const [textIdx, setTextIdx] = useState(0);
+  const [charIdx, setCharIdx] = useState(0);
+  const [deleting, setDeleting] = useState(false);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasFinishedRef = useRef<boolean>(false);
-
-  // Transition to camera when audio completes
-  const handleCompleteTransition = useCallback(() => {
-    if (hasFinishedRef.current) return;
-    hasFinishedRef.current = true;
-
-    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-
-    setLandingOpen(false);
-    if (!cameraEnabled) {
-      onStartCamera();
-    }
-  }, [cameraEnabled, onStartCamera, setLandingOpen]);
-
-  const handleAudioFinished = useCallback(() => {
-    setProgress(100);
-    setLoadingMessageMl('📸 ഫ്ലാഷ്! ചിരി പരിശോധന ആരംഭിക്കുന്നു!');
-    setLoadingMessageEn('FLASH! Smile detection active!');
-
-    // Trigger flash & mechanical shutter sound
-    playCameraShutterSound();
-    setIsFlashing(true);
-
-    flashTimeoutRef.current = setTimeout(() => {
-      setIsFlashing(false);
-      handleCompleteTransition();
-    }, 550);
-  }, [handleCompleteTransition]);
-
-  // Create or retrieve audio element
-  const getAudio = useCallback(() => {
-    if (!audioRef.current) {
-      const audio = new Audio();
-      audio.src = introSmileAudio || '/videos/intro_smile.mp3';
-      audio.preload = 'auto';
-      audio.volume = 1.0;
-
-      // Secondary fallback on error
-      audio.onerror = () => {
-        if (audio.src !== '/videos/intro_smile.mp3') {
-          audio.src = '/videos/intro_smile.mp3';
-          audio.load();
-        }
-      };
-
-      audioRef.current = audio;
-    }
-    return audioRef.current;
-  }, []);
-
-  // Play audio and synchronize progress
-  const playAudio = useCallback(async () => {
-    unlockMobileAudio();
-    if (hasFinishedRef.current) return;
-
-    const audio = getAudio();
-    audio.currentTime = 0;
-    audio.muted = isMuted;
-    audio.volume = isMuted ? 0 : 1.0;
-
-    audio.ontimeupdate = () => {
-      if (audio.duration && !hasFinishedRef.current) {
-        const pct = Math.min(99, Math.round((audio.currentTime / audio.duration) * 100));
-        setProgress(pct);
-
-        if (pct >= 15 && pct < 50) {
-          setLoadingMessageMl("ഫോട്ടോഗ്രാഫർ: 'Smile... smile! ഒന്നു ചിരിച്ചേ!'");
-          setLoadingMessageEn('Photographer: "Smile... smile! Say cheese!"');
-        } else if (pct >= 50 && pct < 85) {
-          setLoadingMessageMl('മൈൻഡ് കൺട്രോൾ: ചിരിക്കരുത്, ₹500 പെറ്റി വീഴും!');
-          setLoadingMessageEn('Hold your face: Do NOT smile! ₹500 fine!');
-        } else if (pct >= 85) {
-          setLoadingMessageMl('ക്യാമറ ഫ്ലാഷ് ചാർജ് ചെയ്യുന്നു... 📸');
-          setLoadingMessageEn('Charging camera strobe flash...');
-        }
-      }
-    };
-
-    audio.onended = () => {
-      setIsPlaying(false);
-      handleAudioFinished();
-    };
-
-    try {
-      await audio.play();
-      setWaitingForTap(false);
-      setIsPlaying(true);
-    } catch (err) {
-      console.warn('[AUDIO] Autoplay blocked by browser, awaiting tap:', err);
-      setWaitingForTap(true);
-      setIsPlaying(false);
-    }
-  }, [getAudio, handleAudioFinished, isMuted]);
-
-  // Auto-attempt playback on mount
   useEffect(() => {
-    hasFinishedRef.current = false;
+    const current = texts[textIdx];
+    const delay = deleting
+      ? speed / 2
+      : charIdx === current.length
+      ? pause
+      : speed;
+
     const timer = setTimeout(() => {
-      playAudio();
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+      if (!deleting) {
+        if (charIdx < current.length) {
+          setDisplay(current.slice(0, charIdx + 1));
+          setCharIdx((c) => c + 1);
+        } else {
+          setDeleting(true);
+        }
+      } else {
+        if (charIdx > 0) {
+          setDisplay(current.slice(0, charIdx - 1));
+          setCharIdx((c) => c - 1);
+        } else {
+          setDeleting(false);
+          setTextIdx((i) => (i + 1) % texts.length);
+        }
       }
-    };
-  }, [playAudio]);
+    }, delay);
 
-  // Screen click handler ensures audio is unlocked on first user tap
-  const handleScreenTap = () => {
-    unlockMobileAudio();
-    if (waitingForTap || !isPlaying) {
-      playAudio();
-    }
-  };
+    return () => clearTimeout(timer);
+  }, [charIdx, deleting, textIdx, texts, speed, pause]);
 
-  const handleSkip = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    unlockMobileAudio();
-    handleCompleteTransition();
-  };
+  return display;
+}
 
-  const toggleSound = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsMuted((prev) => {
-      const next = !prev;
-      if (audioRef.current) {
-        audioRef.current.muted = next;
-        audioRef.current.volume = next ? 0 : 1.0;
-      }
-      return next;
-    });
-  };
+const TAGLINES_ASTROLOGY = [
+  'കവടി നിരത്തി നിന്റെ ഭാവി പറയും...',
+  'ഗ്രഹനില: 100% ഗ്യാരണ്ടി (ശാസ്ത്രീയ ഗ്യാരണ്ടി ഇല്ല)',
+  'മുഖം കണ്ടാൽ ജ്യോതിഷം കണ്ടതുപോലെ!',
+  'ശനി, രാഹു, കേതു — ഒക്കെ നിന്നെ ഉദ്ദേശിച്ചാണ്!',
+];
+
+const TAGLINES_MOVIE = [
+  'ചിരിച്ചാൽ ഒരു കട്ട ഡയലോഗ് കിട്ടും!',
+  'പല്ല് പുറത്ത് കാണിക്കരുത് — ഫൈൻ ആകും!',
+  'ഈ ചിരി കണ്ടാൽ ഡയറക്ടർ ഫ്ലോർ ഇടും!',
+];
+
+
+
+export const LandingScreen: React.FC<LandingScreenProps> = ({ onStartCamera }) => {
+  const {
+    landingOpen,
+    setLandingOpen,
+    setAppPhase,
+    cameraEnabled,
+    mockMode,
+    setMockMode,
+    selectedAstrologerId,
+    setSelectedAstrologerId,
+  } = useSmileStore();
+
+  const [showPulse, setShowPulse] = useState(false);
+  const [autoRotate, setAutoRotate] = useState(true);
+
+  const tagline = useTypewriter(
+    mockMode === 'MOVIE' ? TAGLINES_MOVIE : TAGLINES_ASTROLOGY,
+    50,
+    2200
+  );
+
+  // Auto-rotate astrologer selection periodically until user manually interacts (completely silent)
+  useEffect(() => {
+    if (!autoRotate || mockMode === 'MOVIE') return;
+    const t = setInterval(() => {
+      setSelectedAstrologerId(
+        ASTROLOGER_IDS[(ASTROLOGER_IDS.indexOf(selectedAstrologerId) + 1) % ASTROLOGER_IDS.length],
+        false
+      );
+    }, 3600);
+    return () => clearInterval(t);
+  }, [autoRotate, selectedAstrologerId, mockMode, setSelectedAstrologerId]);
+
+  // Periodic CTA attention pulse
+  useEffect(() => {
+    const t = setInterval(() => {
+      setShowPulse(true);
+      setTimeout(() => setShowPulse(false), 600);
+    }, 5500);
+    return () => clearInterval(t);
+  }, []);
 
   if (!landingOpen) return null;
 
+  const handleStart = () => {
+    stopAstroIntroAudio();
+    unlockMobileAudio();
+    setLandingOpen(false);
+    setAppPhase('WAITING_FACE');
+    if (!cameraEnabled) onStartCamera();
+  };
+
+  const handleAstrologerClick = (id: AstrologerId) => {
+    setAutoRotate(false);
+    // Audio plays ONLY when the user explicitly selects an astrologer
+    setSelectedAstrologerId(id, true);
+  };
+
+  const currentAstrologer =
+    ASTROLOGERS.find((a) => a.id === selectedAstrologerId) || ASTROLOGERS[0];
+
   return (
     <>
-      {/* Strobe Camera Flash Transition */}
-      {isFlashing && (
-        <div className="fixed inset-0 z-70 pointer-events-none bg-white transition-opacity duration-300 ease-out animate-in fade-in" />
-      )}
+      <style>{`
+        @keyframes cosmicSpin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes btnWiggle {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.02); }
+        }
+      `}</style>
 
-      {/* Full-Screen Landing Page (No Card Container, Edge-to-Edge Design) */}
+      {/* FULL-SCREEN ROOT CONTAINER (Warm Parchment Kerala Astrologer Chamber) */}
       <div
-        onClick={handleScreenTap}
-        onTouchStart={handleScreenTap}
-        className="fixed inset-0 z-50 bg-[#FAF8F5] text-black flex flex-col justify-between select-none overflow-y-auto overflow-x-hidden cursor-pointer selection:bg-chiri-yellow selection:text-black"
+        onClick={unlockMobileAudio}
+        onTouchStart={unlockMobileAudio}
+        className="fixed inset-0 z-50 flex flex-col justify-between bg-[#D8C7AD] text-black overflow-x-hidden overflow-y-auto md:overflow-hidden select-none w-full max-w-full"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 40% 40%, rgba(246, 238, 225, 0.45) 0%, rgba(216, 199, 173, 0.9) 60%, rgba(200, 180, 150, 0.95) 100%)',
+        }}
       >
-        {/* Main Content Column */}
-        <div className="w-full max-w-lg mx-auto flex-1 flex flex-col justify-between px-5 sm:px-8 pt-6 sm:pt-8 pb-4">
-          
-          {/* Top Row: Dot Matrix Grid (Left) + Orange Accent Button & Skip (Right) */}
-          <div className="flex items-center justify-between">
-            {/* Dot Matrix Pattern (5x5 grid from Reference) */}
-            <div className="grid grid-cols-5 gap-1.5 w-fit" aria-label="Pattern Grid">
-              {Array.from({ length: 25 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="w-1.5 h-1.5 rounded-[1px] bg-black/85"
-                />
-              ))}
+        {/* Subtle Sacred Malayalam Script & Yantram Watermarks in Background */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.07] select-none font-ml text-4xl sm:text-6xl font-black text-black">
+          <span className="absolute top-[12%] left-[6%]">ത</span>
+          <span className="absolute top-[28%] left-[14%]">ശ</span>
+          <span className="absolute top-[45%] left-[5%]">ര</span>
+          <span className="absolute top-[18%] left-[24%]">മ</span>
+          <span className="absolute top-[65%] left-[12%]">ന</span>
+          <span className="absolute top-[82%] left-[4%]">യ</span>
+          <span className="absolute top-[15%] right-[28%]">ക</span>
+          <span className="absolute top-[35%] right-[10%]">പ</span>
+          <span className="absolute top-[70%] right-[18%]">ഗ</span>
+          <span className="absolute top-[85%] right-[32%]">ഭ</span>
+          {/* Subtle Yantram Diamond line art behind left altar */}
+          <div className="absolute top-[22%] left-[18%] w-48 h-48 border border-black/40 rotate-45" />
+          <div className="absolute top-[26%] left-[20%] w-36 h-36 border border-black/30 rotate-45" />
+        </div>
+
+        {/* 1. TOP GLOBAL HEADER STRIP (Matches Mockup) */}
+        <header className="relative z-30 w-full max-w-full border-b-2 border-black bg-[#EFE8D8] px-2 sm:px-6 py-1.5 sm:py-2 flex items-center justify-between shadow-[0_1px_3px_rgba(0,0,0,0.15)] shrink-0 h-10 sm:h-11">
+          {/* Brand Tag & Live Status */}
+          <div className="flex items-center gap-1.5 sm:gap-3">
+            <div className="bg-black text-chiri-yellow font-mono font-black text-[10px] sm:text-sm px-1.5 sm:px-2.5 py-0.5 border border-black shadow-[1.5px_1.5px_0px_#FFE500]">
+              ASTRO LAB
             </div>
-
-            {/* Right Controls: Orange Square Sound Toggle + Skip */}
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={toggleSound}
-                className="w-10 h-10 sm:w-11 sm:h-11 bg-[#FF5722] hover:bg-[#E64A19] text-white border-2 border-black shadow-brutal-xs flex items-center justify-center cursor-pointer transition-transform active:scale-95"
-                title={isMuted ? 'ശബ്ദം ഓണാക്കുക (Unmute)' : 'ശബ്ദം ഓഫാക്കുക (Mute)'}
-              >
-                {isMuted ? (
-                  <VolumeX className="w-5 h-5 text-white stroke-[2.5]" />
-                ) : (
-                  <Volume2 className="w-5 h-5 text-white stroke-[2.5]" />
-                )}
-              </button>
-
-              <button
-                onClick={handleSkip}
-                className="w-10 h-10 sm:w-11 sm:h-11 bg-white hover:bg-black hover:text-white text-black border-2 border-black shadow-brutal-xs flex items-center justify-center cursor-pointer transition-transform active:scale-95"
-                title="നേരിട്ട് ക്യാമറയിലേക്ക് പോകുക (Skip)"
-              >
-                <X className="w-5 h-5 stroke-[2.5]" />
-              </button>
+            <div className="hidden sm:flex items-center gap-1.5 font-mono text-[10px] font-black uppercase text-black">
+              <span className="w-2 h-2 rounded-full bg-green-600 animate-ping" />
+              <span>LIVE AI ENGINE • v2.5</span>
             </div>
           </div>
 
-          {/* Big Typography Section */}
-          <div className="pt-4 sm:pt-6 flex flex-col">
-            {/* Massive Primary Title: CHIRI */}
-            <h1 className="text-[68px] sm:text-[84px] font-black font-sans uppercase text-black tracking-[-0.04em] leading-[0.84] select-none">
-              CHIRI
-            </h1>
+          {/* Center Mode Switcher Tabs */}
+          <div className="flex bg-[#E6DEC8] border-2 border-black p-0.5 shadow-[1.5px_1.5px_0px_#000]">
+            <button
+              onClick={() => {
+                setMockMode('ASTROLOGY');
+                setAutoRotate(true);
+              }}
+              className={`px-2 sm:px-3 py-0.5 sm:py-1 font-ml font-black text-[10px] sm:text-xs uppercase flex items-center gap-1 sm:gap-1.5 cursor-pointer transition-all ${
+                mockMode === 'ASTROLOGY'
+                  ? 'bg-chiri-yellow text-black border border-black shadow-[1px_1px_0px_#000]'
+                  : 'text-black/70 hover:text-black border border-transparent'
+              }`}
+            >
+              <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
+              <span>ജ്യോതിഷം</span>
+            </button>
+            <button
+              onClick={() => setMockMode('MOVIE')}
+              className={`px-2 sm:px-3 py-0.5 sm:py-1 font-ml font-black text-[10px] sm:text-xs uppercase flex items-center gap-1 sm:gap-1.5 cursor-pointer transition-all ${
+                mockMode === 'MOVIE'
+                  ? 'bg-chiri-yellow text-black border border-black shadow-[1px_1px_0px_#000]'
+                  : 'text-black/70 hover:text-black border border-transparent'
+              }`}
+            >
+              <Film className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
+              <span>സിനിമ റോസ്റ്റ്</span>
+            </button>
+          </div>
 
-            {/* Subtitles: Bold Two-Line Punch */}
-            <div className="mt-2.5 flex flex-col">
-              <span className="text-[26px] sm:text-[32px] font-black font-sans uppercase text-black tracking-tight leading-[1.05]">
-                NO SMILE.
-              </span>
-              <span className="text-[26px] sm:text-[32px] font-black font-sans uppercase text-black tracking-tight leading-[1.05]">
-                EVERY TIME.
-              </span>
-            </div>
+          {/* Right Status / Trust Indicator */}
+          <div className="hidden md:flex items-center gap-1.5 font-mono text-[10px] sm:text-[11px] font-bold text-black/90 bg-[#FAF8F2] border-2 border-black px-3 py-0.5 shadow-[1.5px_1.5px_0px_#000]">
+            <Star className="w-3.5 h-3.5 fill-chiri-yellow text-black" />
+            <span>AI MODEL: TRUST ME BRO</span>
+          </div>
+        </header>
 
-            {/* Checkered Ribbon + Yellow Badge Tag */}
-            <div className="flex items-center gap-2.5 mt-3">
-              {/* Checkered 2-row black & white grid strip */}
-              <div
-                className="w-16 h-6 border-2 border-black shrink-0"
+        {/* 2. MAIN TWO-COLUMN STAGE (Altar touching screen left and bottom, Stage on Right) */}
+        <main className="relative z-10 flex-1 w-full max-w-full min-w-0 h-[calc(100dvh-40px)] sm:h-[calc(100dvh-44px)] flex flex-col md:flex-row items-stretch justify-between overflow-y-auto md:overflow-hidden">
+          
+          {/* LEFT COLUMN: Antique Carved Pooja Table Altar with Hanging Lamp & Nilavilakkus */}
+          <div className="hidden md:flex w-[46%] lg:w-[47%] h-full shrink-0 relative items-end justify-start overflow-hidden pointer-events-none select-none">
+            <img
+              src={altarTableImg}
+              alt="Kerala Astrologer Altar Table with Nilavilakku and Hanging Deepam"
+              className="h-full w-full object-cover object-left-top"
+            />
+          </div>
+
+          {/* RIGHT COLUMN: Interactive Astrologer Horoscope Stage */}
+          <div className="relative flex-1 w-full max-w-full md:max-w-xl min-w-0 h-full flex flex-col items-center justify-center text-center px-2.5 sm:px-6 md:px-8 z-10 mx-auto py-2">
+            
+            {/* Spinning Astrology Zodiac Circle centered behind this right section */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] h-[280px] sm:w-[520px] sm:h-[520px] lg:w-[600px] lg:h-[600px] pointer-events-none select-none -z-10 flex items-center justify-center overflow-hidden">
+              <img
+                src={zodiacWheelImg}
+                alt="Astrology Zodiac Wheel"
+                className="w-full h-full object-cover rounded-full mix-blend-multiply opacity-[0.24] sm:opacity-[0.28] contrast-125 pointer-events-none"
                 style={{
-                  backgroundImage:
-                    'conic-gradient(#000 90deg, #FAF8F5 90deg 180deg, #000 180deg 270deg, #FAF8F5 270deg)',
-                  backgroundSize: '8px 8px',
+                  animation: 'cosmicSpin 85s linear infinite',
                 }}
               />
-
-              {/* Yellow Pill Tag */}
-              <div className="bg-chiri-yellow border-2 border-black px-3 py-1 text-xs sm:text-sm font-mono font-black uppercase tracking-wider text-black shadow-brutal-xs flex items-center gap-1">
-                <span>SERIOUS. RELAX. REPEAT.</span>
-              </div>
             </div>
-          </div>
 
-          {/* Centerpiece Area: Upward-Slanted Yellow Polygon + Comic Vintage Camera Animation */}
-          <div className="relative w-full my-4 sm:my-6 flex items-center justify-center min-h-[220px] sm:min-h-[260px]">
-            {/* Upward Slanted Yellow Polygon Background cutting across the full section */}
-            <div
-              className="absolute -inset-x-6 sm:-inset-x-12 h-44 sm:h-52 bg-chiri-yellow border-y-3 border-black shadow-brutal-xs"
-              style={{
-                clipPath: 'polygon(0% 48%, 100% 12%, 100% 88%, 0% 76%)',
-              }}
-            />
-
-            {/* Comic Vintage Camera SVG & Audio-Reactive Visualizer */}
-            <div className="relative z-10 w-full flex flex-col items-center">
-              
-              {/* Comic Speech Bubble with Dialogue */}
-              <div className="transition-all duration-300 mb-1.5 z-20 opacity-100 scale-100 translate-y-0">
-                <div className="bg-white border-2 border-black px-3.5 py-1.5 shadow-brutal-xs rounded-lg flex items-center gap-2 font-ml font-bold text-xs sm:text-sm text-black">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping shrink-0" />
-                  <span>"Smile... smile! ഒന്നു ചിരിച്ചേ!" 📸</span>
-                </div>
-                {/* Speech Bubble Tail */}
-                <div className="w-2.5 h-2.5 bg-white border-r-2 border-b-2 border-black rotate-45 mx-auto -mt-1.5" />
-              </div>
-
-              {/* Vintage Studio Camera SVG (Comic/Retro Styling) */}
-              <div className="relative flex flex-col items-center select-none">
-                <svg
-                  viewBox="0 0 280 180"
-                  className="w-64 sm:w-76 h-auto drop-shadow-md animate-pulse"
-                >
-                  {/* Ground Cast Shadow */}
-                  <ellipse cx="140" cy="172" rx="75" ry="7" fill="#000000" fillOpacity="0.25" />
-
-                  {/* Tripod Wooden Legs with Black Ink Stroke */}
-                  <line x1="140" y1="130" x2="85" y2="170" stroke="#000000" strokeWidth="6" strokeLinecap="round" />
-                  <line x1="140" y1="130" x2="140" y2="172" stroke="#000000" strokeWidth="6" strokeLinecap="round" />
-                  <line x1="140" y1="130" x2="195" y2="170" stroke="#000000" strokeWidth="6" strokeLinecap="round" />
-
-                  {/* Big Vintage Flash Reflector Dish on Top Left */}
-                  <g className="animate-bounce">
-                    <line x1="100" y1="50" x2="80" y2="28" stroke="#000000" strokeWidth="5" strokeLinecap="round" />
-                    {/* Dish */}
-                    <circle cx="70" cy="22" r="22" fill="#FAF8F5" stroke="#000000" strokeWidth="3.5" />
-                    <circle cx="70" cy="22" r="14" fill="#FFE500" stroke="#000000" strokeWidth="2.5" />
-                    {/* Bulb */}
-                    <circle cx="70" cy="22" r="6" fill="#FF5722" stroke="#000000" strokeWidth="2" />
-                    
-                    {/* Sparkles / Flash Charging Rays */}
-                    <line x1="40" y1="12" x2="30" y2="5" stroke="#000000" strokeWidth="3" strokeLinecap="round" />
-                    <line x1="44" y1="36" x2="32" y2="45" stroke="#000000" strokeWidth="3" strokeLinecap="round" />
-                    <line x1="70" y1="-8" x2="70" y2="-1" stroke="#000000" strokeWidth="3" strokeLinecap="round" />
-                    <line x1="96" y1="8" x2="105" y2="2" stroke="#000000" strokeWidth="3" strokeLinecap="round" />
-                  </g>
-
-                  {/* Main Vintage Wooden Camera Box Body */}
-                  <rect
-                    x="90"
-                    y="45"
-                    width="100"
-                    height="85"
-                    rx="6"
-                    fill="#FAF8F5"
-                    stroke="#000000"
-                    strokeWidth="4"
-                  />
-
-                  {/* Top Bellows / Hood Accent */}
-                  <rect x="98" y="38" width="84" height="8" rx="2" fill="#FFE500" stroke="#000000" strokeWidth="3" />
-
-                  {/* Accordion Pleat Lines on Body (Retro Bellows) */}
-                  <path
-                    d="M 104 60 L 114 60 L 108 75 L 118 75 L 112 90 L 122 90 L 116 105 L 126 105"
-                    stroke="#000000"
-                    strokeWidth="3"
-                    fill="none"
-                  />
-                  <path
-                    d="M 176 60 L 166 60 L 172 75 L 162 75 L 168 90 L 158 90 L 164 105 L 154 105"
-                    stroke="#000000"
-                    strokeWidth="3"
-                    fill="none"
-                  />
-
-                  {/* Center Brass Lens Base & Aperture Housing */}
-                  <circle cx="140" cy="85" r="28" fill="#FFE500" stroke="#000000" strokeWidth="3.5" />
-                  <circle cx="140" cy="85" r="21" fill="#000000" />
-                  
-                  {/* Concentric Glass Lens Rings */}
-                  <circle cx="140" cy="85" r="17" fill="#1A1A1A" stroke="#FF5722" strokeWidth="2" />
-                  <circle cx="140" cy="85" r="10" fill="#262626" />
-                  <circle cx="140" cy="85" r="5" fill="#FFE500" />
-
-                  {/* Lens Glass Reflection Highlights */}
-                  <path
-                    d="M 130 73 A 14 14 0 0 1 150 73"
-                    stroke="#FFFFFF"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                  <circle cx="134" cy="91" r="2.5" fill="#FFFFFF" />
-
-                  {/* Front Checkerboard Trim on Camera Body */}
-                  <g>
-                    <rect x="94" y="115" width="92" height="11" fill="#000000" stroke="#000000" strokeWidth="2" />
-                    {Array.from({ length: 9 }).map((_, i) => (
-                      <rect
-                        key={i}
-                        x={96 + i * 10}
-                        y={i % 2 === 0 ? 116 : 121}
-                        width="5"
-                        height="4.5"
-                        fill="#FFE500"
-                      />
-                    ))}
-                  </g>
-
-                  {/* Sound Wave Equalizer Bars */}
-                  <g transform="translate(200, 55)">
-                    <rect x="0" y="20" width="4" height="20" rx="2" fill="#000000" className="animate-pulse" />
-                    <rect x="8" y="10" width="4" height="35" rx="2" fill="#000000" className="animate-bounce" />
-                    <rect x="16" y="15" width="4" height="28" rx="2" fill="#000000" className="animate-pulse" />
-                  </g>
-                </svg>
-              </div>
+            {/* Top Pill / Badge */}
+            <div className="inline-flex items-center justify-center gap-1.5 bg-chiri-yellow text-black font-mono font-black text-[9px] sm:text-xs uppercase tracking-wider px-2 sm:px-3.5 py-0.5 sm:py-1 border-2 border-black shadow-[2px_2px_0px_#000] mb-1.5 sm:mb-2.5 max-w-[92%] overflow-hidden">
+              <span className="shrink-0">🔮</span>
+              <span className="truncate">ASTRO LAB CHAMBER • {currentAstrologer.name}</span>
             </div>
-          </div>
 
-          {/* Automatic Loading & Status Section */}
-          <div className="pb-3 flex flex-col gap-2.5">
-            {waitingForTap ? (
-              /* High-Visibility Interactive Tap Banner if Browser Blocked Autoplay */
-              <div className="w-full bg-[#FFE500] border-3 border-black p-4 shadow-brutal flex items-center justify-center gap-2.5 animate-bounce cursor-pointer">
-                <Volume2 className="w-5 h-5 text-black animate-pulse shrink-0" />
-                <span className="font-sans font-black text-sm sm:text-base uppercase tracking-wider text-black">
-                  തുടങ്ങാൻ ഇവിടെ തൊടൂ // TAP ANYWHERE TO START
-                </span>
-              </div>
-            ) : (
-              /* Brutalist Loading Progress Bar Running in Sync with Audio */
-              <div className="w-full bg-white border-3 border-black p-4 shadow-brutal flex flex-col gap-2.5 animate-in fade-in">
-                <div className="flex items-center justify-between font-mono text-xs sm:text-sm font-black text-black">
-                  <span className="flex items-center gap-1.5 text-chiri-red truncate">
-                    <Sparkles className="w-4 h-4 text-chiri-yellow fill-chiri-yellow animate-spin shrink-0" />
-                    <span className="truncate">{loadingMessageMl}</span>
-                  </span>
-                  <span className="bg-black text-chiri-yellow px-2 py-0.5 text-xs sm:text-sm font-mono shrink-0 ml-1">
-                    {progress}%
-                  </span>
-                </div>
+            {/* Main Headline */}
+            <h1 className="text-2xl sm:text-4xl md:text-5xl font-black font-ml tracking-tight text-black leading-tight drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)] w-full text-center">
+              {mockMode === 'MOVIE' ? 'സിനിമ റോസ്റ്റ്™' : 'മുഖം നോക്കി ഭാവി™'}
+            </h1>
 
-                {/* Brutalist Striped Progress Bar */}
-                <div className="w-full h-4 sm:h-5 bg-[#E5E5DE] border-2 border-black overflow-hidden p-0.5">
-                  <div
-                    className="h-full bg-chiri-yellow border border-black transition-all duration-100 ease-out"
-                    style={{
-                      width: `${progress}%`,
-                      backgroundImage:
-                        'repeating-linear-gradient(45deg, #FFE500, #FFE500 8px, #000 8px, #000 12px)',
-                    }}
-                  />
-                </div>
+            {/* Subtitle description */}
+            <p className="font-ml font-bold text-[11px] sm:text-sm md:text-base text-black/85 w-full max-w-lg mx-auto leading-snug mt-1 mb-2.5 sm:mb-4 px-2 text-center break-words">
+              {mockMode === 'MOVIE'
+                ? 'ക്യാമറയിലേക്ക് നോക്കൂ... പല്ല് കാണിച്ച് ചിരിച്ചാൽ സിനിമയിലെ കട്ട റോസ്റ്റ് ഡയലോഗ് വരും!'
+                : 'നിന്റെ മുഖഭാവം നോക്കി സാമുദ്രിക ശാസ്ത്രവും കവടിയും നിരത്തി പച്ചയായ ഭാവി പ്രവചിക്കുന്നു!'}
+            </p>
 
-                <div className="flex items-center justify-between text-[11px] sm:text-xs font-mono text-black/70">
-                  <span className="truncate">{loadingMessageEn}</span>
-                  <button
-                    onClick={handleSkip}
-                    className="underline font-bold text-black hover:text-chiri-red cursor-pointer shrink-0 ml-1 flex items-center gap-0.5"
-                  >
-                    <span>Skip</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
+            {/* 3 Astrologer Cards Row (Exact replica of mockup cards) */}
+            {mockMode === 'ASTROLOGY' && (
+              <div className="w-full max-w-full mb-2 sm:mb-3">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-3.5 w-full">
+                  {ASTROLOGERS.map((a) => {
+                    const isSelected = selectedAstrologerId === a.id;
+                    return (
+                      <button
+                        key={a.id}
+                        onClick={() => handleAstrologerClick(a.id as AstrologerId)}
+                        className={`group relative p-1 sm:p-2.5 min-w-0 w-full text-center flex flex-col items-stretch justify-between cursor-pointer transition-all duration-200 select-none min-h-[108px] sm:min-h-[140px] ${
+                          isSelected
+                            ? 'bg-[#FAF9F5] border-2 border-black shadow-[3px_3px_0px_#000] -translate-y-0.5 z-10'
+                            : 'bg-[#F0E9DC] border border-black/40 shadow-[1.5px_1.5px_0px_rgba(0,0,0,0.15)] hover:bg-[#FAF8F2] opacity-90 hover:opacity-100'
+                        }`}
+                      >
+                        {/* Selected Tag on Top Edge */}
+                        {isSelected && (
+                          <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-chiri-yellow text-black border border-black font-mono text-[6.5px] sm:text-[8px] font-black uppercase px-1 sm:px-2 py-0.5 shadow-[1px_1px_0px_#000] whitespace-nowrap">
+                            SELECTED ASTROLOGER
+                          </div>
+                        )}
+
+                        {/* Circular Avatar */}
+                        <div className="relative my-0.5 flex-1 flex items-center justify-center mx-auto">
+                          <div
+                            className={`rounded-full border-2 border-black overflow-hidden flex items-center justify-center transition-transform duration-200 ${
+                              isSelected
+                                ? 'w-11 h-11 sm:w-16 sm:h-16 ring-2 ring-chiri-yellow'
+                                : 'w-9 h-9 sm:w-14 sm:h-14'
+                            }`}
+                            style={{
+                              background: isSelected ? '#FFE500' : '#E6DEC8',
+                            }}
+                          >
+                            <UnniAvatar
+                              astrologerId={a.id as AstrologerId}
+                              expression={isSelected ? 'verdict' : 'idle'}
+                              size="lg"
+                              className="!w-full !h-full !shadow-none !border-0 !rounded-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Character Name & Subtitle matching Mockup Text */}
+                        <div className="w-full min-w-0 overflow-hidden px-0.5 text-center">
+                          {a.id === 'unni' ? (
+                            <div className="font-ml font-black text-[10px] sm:text-xs text-black leading-tight mt-1 text-center truncate">
+                              ജ്യോത്സ്യൻ ഉണ്ണി
+                            </div>
+                          ) : (
+                            <div className="font-ml font-black text-[10px] sm:text-xs text-black leading-tight mt-1 text-center truncate">
+                              {a.name}
+                            </div>
+                          )}
+                          <div className="font-ml text-[7.5px] sm:text-[9.5px] text-black/60 font-bold truncate mt-0.5 text-center">
+                            {a.id === 'unni'
+                              ? 'കവടി നിരത്തൽ & കോസ്മി...'
+                              : a.id === 'kumbidi'
+                              ? 'ലോക്കൽ മായാവി & സ്പിരിറ്റ്...'
+                              : 'സാമുദ്രിക ശാസ്ത്രം &...'}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Automatic Navigation Note */}
-            <div className="text-center font-mono text-[10px] sm:text-[11px] font-bold text-black/60 py-0.5">
-              ശബ്ദം അവസാനിക്കുമ്പോൾ നേരിട്ട് ക്യാമറ തുറക്കും • Auto-opening camera...
+            {/* Parchment Quote Box (Deckle-edge paper style from mockup) */}
+            <div
+              className="w-full max-w-full bg-[#FAF7EE] border border-black/35 shadow-[0_2px_6px_rgba(0,0,0,0.12)] p-2 sm:p-3 text-left relative mb-2"
+              style={{
+                clipPath:
+                  'polygon(0% 2px, 3% 0px, 7% 3px, 12% 1px, 18% 3px, 24% 0px, 30% 2px, 36% 1px, 42% 3px, 48% 0px, 54% 2px, 60% 1px, 66% 3px, 72% 0px, 78% 2px, 84% 1px, 90% 3px, 96% 0px, 100% 2px, 100% calc(100% - 2px), 97% 100%, 92% calc(100% - 3px), 86% calc(100% - 1px), 80% calc(100% - 3px), 74% 100%, 68% calc(100% - 2px), 62% calc(100% - 1px), 56% calc(100% - 3px), 50% 100%, 44% calc(100% - 2px), 38% calc(100% - 3px), 32% calc(100% - 1px), 26% calc(100% - 3px), 20% 100%, 14% calc(100% - 2px), 8% calc(100% - 1px), 3% calc(100% - 3px), 0% 100%, 1px 90%, 3px 80%, 0px 70%, 2px 60%, 1px 50%, 3px 40%, 0px 30%, 2px 20%, 1px 10%)',
+              }}
+            >
+              <div className="flex items-start gap-2 sm:gap-2.5">
+                <div className="w-5 h-5 sm:w-7 sm:h-7 rounded-full border border-black overflow-hidden shrink-0 bg-[#FFE500] mt-0.5">
+                  <UnniAvatar
+                    astrologerId={currentAstrologer.id as AstrologerId}
+                    expression="idle"
+                    className="!w-full !h-full !shadow-none !border-0 !rounded-none"
+                  />
+                </div>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <div className="font-ml text-[9.5px] sm:text-[11px] text-black/75 font-bold truncate">
+                    {currentAstrologer.name} പറയുന്നു:
+                  </div>
+                  <p className="font-ml font-bold text-[11px] sm:text-sm text-black leading-snug mt-0.5 line-clamp-2 break-words">
+                    "{currentAstrologer.tagline}"
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Typewriter Dynamic Tagline Box (Clean White Box from Mockup) */}
+            <div className="w-full max-w-full bg-white border-2 border-black shadow-[2px_2px_0px_#000] py-1.5 sm:py-2 px-2 sm:px-3 flex items-center justify-center min-h-[34px] sm:min-h-[38px] mb-2 sm:mb-3">
+              <p className="font-ml font-black text-[11px] sm:text-sm text-black leading-snug text-center truncate">
+                "{tagline}
+                <span className="inline-block w-0.5 h-3.5 bg-black ml-0.5 animate-pulse" />
+                "
+              </p>
+            </div>
+
+            {/* HERO CTA BUTTON (Big Yellow Brutalist Button from Mockup) */}
+            <div className="w-full max-w-full">
+              <button
+                onClick={handleStart}
+                className="w-full py-2.5 sm:py-3.5 px-4 sm:px-6 bg-chiri-yellow hover:bg-black hover:text-chiri-yellow text-black border-3 border-black font-black font-ml text-xs sm:text-base md:text-lg tracking-wide uppercase cursor-pointer flex items-center justify-center gap-2 shadow-[4px_4px_0px_#000] active:translate-x-1 active:translate-y-1 transition-all"
+                style={{
+                  animation: showPulse ? 'btnWiggle 0.5s ease' : 'none',
+                }}
+              >
+                <Zap className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3] fill-current shrink-0" />
+                <span className="truncate">
+                  {mockMode === 'MOVIE'
+                    ? 'തുടങ്ങാം (START ROAST)'
+                    : `തുടങ്ങാം (${currentAstrologer.name.split(' ')[0]}യുടെ ജാതകം)`}
+                </span>
+                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3] shrink-0" />
+              </button>
             </div>
           </div>
-        </div>
-
-        {/* Full-Width Bottom Hazard Caution Stripe */}
-        <div className="w-full shrink-0">
-          <div
-            className="h-5 sm:h-6 w-full border-t-3 border-black"
-            style={{
-              backgroundImage:
-                'repeating-linear-gradient(-45deg, #000, #000 14px, #FAF8F5 14px, #FAF8F5 28px)',
-            }}
-          />
-
-          {/* Full-Width Footer */}
-          <div className="bg-[#FAF8F5] py-2 px-4 text-center font-mono text-[10px] sm:text-[11px] font-black uppercase text-black/60 tracking-wider">
-            KERALA CHIRI POLICE // OFFICIAL NO-SMILE ZONE
-          </div>
-        </div>
+        </main>
       </div>
     </>
   );
 };
+

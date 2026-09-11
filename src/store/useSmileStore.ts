@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { MockVideo } from '@/data/mockVideos';
+import { MockVideo, selectRandomMockVideo } from '@/data/mockVideos';
 import { MockLine } from '@/data/mockLines';
 import { SmileIntensity } from '@/config/detectionConfig';
 import {
@@ -9,6 +9,14 @@ import {
   getRandomExpressionVideo,
 } from '@/utils/expressionDetector';
 import { smileSmile } from '@/data/videoAssets';
+import {
+  JyothishamPrediction,
+  generateFaceJyothisham,
+  AstrologerId,
+  getAstrologerById,
+  getRandomSmileRoast,
+} from '@/data/jyothishamData';
+import { playAstrologerAudio, stopAstroIntroAudio } from '@/utils/astroAudio';
 
 export type DetectionState =
   | 'IDLE'
@@ -20,7 +28,29 @@ export type DetectionState =
 
 export type MockStage = 'idle' | 'text_mock' | 'video_dialogue';
 
+export type AppPhase = 'LANDING' | 'WAITING_FACE' | 'SCANNING' | 'RESULT';
+
+export type MockMode = 'ASTROLOGY' | 'MOVIE';
+
 export interface SmileState {
+  // Mode Selection: Astrology Mock vs Movie Mock
+  mockMode: MockMode;
+  setMockMode: (mode: MockMode) => void;
+
+  // Selected Astrologer Character ('unni' | 'kumbidi' | 'yeshu')
+  selectedAstrologerId: AstrologerId;
+  isAstrologerSwitching: boolean;
+  selectNextAstrologer: () => void;
+  setSelectedAstrologerId: (id: AstrologerId, playAudio?: boolean) => void;
+
+  // App Overall Experience Phase
+  appPhase: AppPhase;
+  scanProgress: number;
+  scanMessage: string;
+  currentJathakam: JyothishamPrediction | null;
+  smileReactionToast: string | null;
+  isShareCardOpen: boolean;
+
   // Camera & Device State
   cameraEnabled: boolean;
   cameraLoading: boolean;
@@ -90,6 +120,14 @@ export interface SmileState {
   debugMode: boolean;
 
   // Actions
+  setAppPhase: (phase: AppPhase) => void;
+  startScanSequence: () => void;
+  completeScan: () => void;
+  resetForNewReading: () => void;
+  triggerSmileReaction: (score: number) => void;
+  clearSmileReactionToast: () => void;
+  setShareCardOpen: (open: boolean) => void;
+
   setCameraEnabled: (enabled: boolean) => void;
   setCameraLoading: (loading: boolean) => void;
   setCameraError: (error: string | null, permissionDenied?: boolean) => void;
@@ -134,8 +172,120 @@ export interface SmileState {
 }
 
 let pendingMockTimer: ReturnType<typeof setTimeout> | null = null;
+let scanIntervalTimer: ReturnType<typeof setInterval> | null = null;
+let smileToastTimer: ReturnType<typeof setTimeout> | null = null;
+
+let switchLoadingTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useSmileStore = create<SmileState>((set, get) => ({
+  // Mode Selection: Astrology Mock vs Movie Mock
+  mockMode: 'ASTROLOGY',
+  setMockMode: (mode) => {
+    if (mode === 'ASTROLOGY') {
+      get().finishMockPlayback();
+      set({
+        mockMode: mode,
+        overlayVideoUrl: null,
+        isOverlayVideoPlaying: false,
+        mockStage: 'idle',
+        isPlayingMock: false,
+      });
+    } else {
+      stopAstroIntroAudio();
+      set({ mockMode: mode });
+    }
+  },
+
+  // Selected Astrologer Character
+  selectedAstrologerId: 'unni',
+  isAstrologerSwitching: false,
+  selectNextAstrologer: () => {
+    const currentId = get().selectedAstrologerId;
+    const nextId: AstrologerId =
+      currentId === 'unni' ? 'kumbidi' : currentId === 'kumbidi' ? 'yeshu' : 'unni';
+
+    // Stop current audio if playing
+    stopAstroIntroAudio();
+    if (switchLoadingTimer) {
+      clearTimeout(switchLoadingTimer);
+      switchLoadingTimer = null;
+    }
+
+    const profile = getAstrologerById(nextId);
+
+    // Play the audio for the new astrologer (intro, kumbidi, yeshu)
+    playAstrologerAudio(profile.audioKey);
+
+    // Enter switching loading screen
+    set({
+      selectedAstrologerId: nextId,
+      isAstrologerSwitching: true,
+      scanMessage: `${profile.name} എത്തുന്നു...`,
+    });
+
+    const loadingDuration = Math.round(profile.audioDurationSec * 1000);
+
+    switchLoadingTimer = setTimeout(() => {
+      const { currentJathakam, smileScore, symmetryScore } = get();
+      if (currentJathakam) {
+        const updatedPrediction = generateFaceJyothisham(smileScore, symmetryScore, nextId);
+        set({
+          isAstrologerSwitching: false,
+          currentJathakam: updatedPrediction,
+        });
+      } else {
+        set({
+          isAstrologerSwitching: false,
+          scanMessage: profile.waitingQuote,
+        });
+      }
+      switchLoadingTimer = null;
+    }, loadingDuration);
+  },
+  setSelectedAstrologerId: (id: AstrologerId, playAudio: boolean = false) => {
+    stopAstroIntroAudio();
+    if (switchLoadingTimer) {
+      clearTimeout(switchLoadingTimer);
+      switchLoadingTimer = null;
+    }
+
+    // If audio is not requested (e.g. background preview or silent update), only update the ID
+    if (!playAudio) {
+      set({ selectedAstrologerId: id });
+      return;
+    }
+
+    const profile = getAstrologerById(id);
+    playAstrologerAudio(profile.audioKey);
+
+    set({
+      selectedAstrologerId: id,
+      isAstrologerSwitching: true,
+      scanMessage: `${profile.name} എത്തുന്നു...`,
+    });
+
+    const loadingDuration = Math.round(profile.audioDurationSec * 1000);
+
+    switchLoadingTimer = setTimeout(() => {
+      const { currentJathakam, smileScore, symmetryScore } = get();
+      if (currentJathakam) {
+        const updatedPrediction = generateFaceJyothisham(smileScore, symmetryScore, id);
+        set({ isAstrologerSwitching: false, currentJathakam: updatedPrediction });
+      } else {
+        set({ isAstrologerSwitching: false, scanMessage: profile.waitingQuote });
+      }
+      switchLoadingTimer = null;
+    }, loadingDuration);
+  },
+
+  // App Overall Experience Phase
+  appPhase: 'LANDING',
+  scanProgress: 0,
+  scanMessage: 'മുഖം തിരയുന്നു...',
+  currentJathakam: null,
+  smileReactionToast: null,
+  isShareCardOpen: false,
+
   // Camera Initial State
   cameraEnabled: false,
   cameraLoading: false,
@@ -175,7 +325,7 @@ export const useSmileStore = create<SmileState>((set, get) => ({
   isOverlayVideoPlaying: false,
   overlayVideoMuted: false,
 
-  // Mock Sequence Stages (Stage 1: Mock with text -> Stage 2: Play movie dialogue)
+  // Mock Sequence Stages
   mockStage: 'idle',
   mockText: '',
 
@@ -203,9 +353,153 @@ export const useSmileStore = create<SmileState>((set, get) => ({
   voiceEnabled: false,
   debugMode: false,
 
+  // Phase & Jathakam Actions
+  setAppPhase: (phase) => {
+    set({ appPhase: phase, landingOpen: phase === 'LANDING' });
+  },
+
+  setShareCardOpen: (open) => {
+    set({ isShareCardOpen: open });
+  },
+
+  startScanSequence: () => {
+    if (scanIntervalTimer) clearInterval(scanIntervalTimer);
+
+    const astrologer = getAstrologerById(get().selectedAstrologerId);
+    const scanQuotes = astrologer.scanQuotes;
+
+    set({
+      appPhase: 'SCANNING',
+      scanProgress: 5,
+      scanMessage: scanQuotes[0] || 'മുഖം പരിശോധിക്കുന്നു...',
+    });
+
+    let currentStep = 0;
+    const totalSteps = 10;
+    // 300ms per step (3s total face analysis without audio)
+    const intervalTime = 300;
+
+    scanIntervalTimer = setInterval(() => {
+      currentStep++;
+      const progress = Math.min(100, Math.round((currentStep / totalSteps) * 100));
+      const msgIndex = Math.min(scanQuotes.length - 1, currentStep);
+
+      set({
+        scanProgress: progress,
+        scanMessage: scanQuotes[msgIndex] || scanQuotes[scanQuotes.length - 1],
+      });
+
+      if (currentStep >= totalSteps) {
+        if (scanIntervalTimer) {
+          clearInterval(scanIntervalTimer);
+          scanIntervalTimer = null;
+        }
+        get().completeScan();
+      }
+    }, intervalTime);
+  },
+
+  completeScan: () => {
+    if (scanIntervalTimer) {
+      clearInterval(scanIntervalTimer);
+      scanIntervalTimer = null;
+    }
+
+    // Stop loading intro audio when mock is complete
+    stopAstroIntroAudio();
+
+    const { smileScore, symmetryScore, selectedAstrologerId } = get();
+    const prediction = generateFaceJyothisham(smileScore, symmetryScore, selectedAstrologerId);
+
+    set({
+      appPhase: 'RESULT',
+      currentJathakam: prediction,
+      scanProgress: 100,
+      scanMessage: 'ANALYSIS COMPLETE.',
+    });
+  },
+
+  resetForNewReading: () => {
+    if (scanIntervalTimer) {
+      clearInterval(scanIntervalTimer);
+      scanIntervalTimer = null;
+    }
+    if (smileToastTimer) {
+      clearTimeout(smileToastTimer);
+      smileToastTimer = null;
+    }
+
+    // Stop intro audio if still playing
+    stopAstroIntroAudio();
+
+    set({
+      appPhase: 'WAITING_FACE',
+      currentJathakam: null,
+      scanProgress: 0,
+      scanMessage: 'ക്യാമറയിലേക്ക് നോക്കൂ...',
+      smileReactionToast: null,
+      overlayVideoUrl: null,
+      isOverlayVideoPlaying: false,
+      mockStage: 'idle',
+      isPlayingMock: false,
+    });
+  },
+
+  triggerSmileReaction: (score: number) => {
+    // In ASTROLOGY mode: Active astrologer character roasts the smile directly with speech/toast, NO movie videos!
+    if (get().mockMode === 'ASTROLOGY') {
+      const toastMsg = getRandomSmileRoast(get().selectedAstrologerId);
+      if (smileToastTimer) clearTimeout(smileToastTimer);
+      set({
+        smileReactionToast: toastMsg,
+      });
+      smileToastTimer = setTimeout(() => {
+        set({ smileReactionToast: null });
+        smileToastTimer = null;
+      }, 4000);
+      return;
+    }
+
+    // In MOVIE mode: Once a reaction video plays, it MUST complete! Do not interrupt!
+    if (get().isOverlayVideoPlaying) {
+      return;
+    }
+
+    const rounded = Math.round(score);
+    if (smileToastTimer) clearTimeout(smileToastTimer);
+
+    const toastMsg = `SMILE DETECTED: ${rounded}% — ചിരി നിരോധിച്ചിരിക്കുന്നു!`;
+
+    // Select matching reaction video
+    const intensity = rounded >= 80 ? 'extreme' : rounded >= 50 ? 'medium' : 'mild';
+    const randomVid = selectRandomMockVideo(intensity, null, rounded >= 75 ? 'wierd_laugh' : 'smile');
+
+    set({
+      smileReactionToast: toastMsg,
+      overlayVideoUrl: randomVid.src,
+      isOverlayVideoPlaying: true,
+      currentExpression: rounded >= 80 ? 'laughing' : 'smile',
+      mockStage: 'video_dialogue',
+      isPlayingMock: true,
+    });
+
+    smileToastTimer = setTimeout(() => {
+      set({ smileReactionToast: null });
+      smileToastTimer = null;
+    }, 4500);
+  },
+
+  clearSmileReactionToast: () => {
+    if (smileToastTimer) {
+      clearTimeout(smileToastTimer);
+      smileToastTimer = null;
+    }
+    set({ smileReactionToast: null });
+  },
+
   // Actions
   toggleFineReceipt: () => set((state) => ({ fineReceiptOpen: !state.fineReceiptOpen })),
-  setLandingOpen: (open: boolean) => set({ landingOpen: open }),
+  setLandingOpen: (open: boolean) => set({ landingOpen: open, appPhase: open ? 'LANDING' : 'WAITING_FACE' }),
 
   toggleChallengeMode: () =>
     set((state) => ({
@@ -235,6 +529,11 @@ export const useSmileStore = create<SmileState>((set, get) => ({
     videoUrl,
     delayMs = 1800,
   }) => {
+    // Once a video plays, it MUST complete! Never interrupt an active video.
+    if (get().isOverlayVideoPlaying) {
+      return;
+    }
+
     if (pendingMockTimer) {
       clearTimeout(pendingMockTimer);
       pendingMockTimer = null;
@@ -270,7 +569,6 @@ export const useSmileStore = create<SmileState>((set, get) => ({
       },
     }));
 
-    // Stage 1: Display text mock first. After delay, advance to Stage 2: Movie Dialogue Video!
     pendingMockTimer = setTimeout(() => {
       pendingMockTimer = null;
       if (targetVideoUrl) {
@@ -328,6 +626,8 @@ export const useSmileStore = create<SmileState>((set, get) => ({
       overlayVideoUrl: null,
       mockStage: 'idle',
       isPlayingMock: false,
+      cooldownActive: false,
+      detectionState: get().cameraEnabled ? 'SERIOUS' : 'IDLE',
     });
   },
 
@@ -339,6 +639,7 @@ export const useSmileStore = create<SmileState>((set, get) => ({
       isSmiling: enabled ? get().isSmiling : false,
       rawSmileScore: enabled ? get().rawSmileScore : 0,
       smileScore: enabled ? get().smileScore : 0,
+      appPhase: enabled ? (get().appPhase === 'LANDING' ? 'WAITING_FACE' : get().appPhase) : 'LANDING',
     });
   },
 
@@ -451,6 +752,10 @@ export const useSmileStore = create<SmileState>((set, get) => ({
       clearTimeout(pendingMockTimer);
       pendingMockTimer = null;
     }
+    if (scanIntervalTimer) {
+      clearInterval(scanIntervalTimer);
+      scanIntervalTimer = null;
+    }
     set({
       smileCount: 0,
       mockDeployedCount: 0,
@@ -465,6 +770,9 @@ export const useSmileStore = create<SmileState>((set, get) => ({
       overlayVideoUrl: null,
       isOverlayVideoPlaying: false,
       detectionState: get().cameraEnabled ? 'SEARCHING' : 'IDLE',
+      currentJathakam: null,
+      scanProgress: 0,
+      smileReactionToast: null,
     });
   },
 }));

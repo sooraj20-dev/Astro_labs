@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { useSmileStore } from '@/store/useSmileStore';
-import { X, Download, AlertOctagon, CheckCircle2 } from 'lucide-react';
+import { X, Download } from 'lucide-react';
 
 export const FineReceiptModal: React.FC = () => {
   const {

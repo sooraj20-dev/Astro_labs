@@ -1,5 +1,3 @@
-import { SmileIntensity } from '@/config/detectionConfig';
-
 export interface MockLine {
   id: string;
   intensity: 'mild' | 'medium' | 'extreme';

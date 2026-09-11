@@ -1,4 +1,4 @@
-﻿import {
+import {
   noSmileAngry,
   noSmileCry,
   noSmileCurious4,
@@ -169,9 +169,21 @@ export function getMockVideosByIntensity(intensity: 'mild' | 'medium' | 'extreme
   return MOCK_VIDEOS.filter((video) => video.intensity === intensity);
 }
 
+// Global cycle history of played videos to guarantee NO repetition until all videos have been played
+const playedVideoIds = new Set<string>();
+let lastPlayedVideoId: string | null = null;
+
+/**
+ * Reset the played history if needed.
+ */
+export function resetPlayedVideosHistory(): void {
+  playedVideoIds.clear();
+  lastPlayedVideoId = null;
+}
+
 /**
  * Randomly select a mock video matching the given intensity or category without
- * repeating the immediately preceding video ID (if more than 1 option is available).
+ * repeating ANY video until all available videos in the library have been watched.
  */
 export function selectRandomMockVideo(
   intensity: 'mild' | 'medium' | 'extreme',
@@ -186,14 +198,42 @@ export function selectRandomMockVideo(
     eligibleVideos = MOCK_VIDEOS;
   }
 
-  if (eligibleVideos.length === 1) {
-    return eligibleVideos[0];
+  // 1. Filter out videos that have already been played in the current cycle
+  let unplayed = eligibleVideos.filter(
+    (v) => !playedVideoIds.has(v.id) && !playedVideoIds.has(v.src)
+  );
+
+  // 2. If all eligible videos have been exhausted, reset cycle while keeping last played to prevent consecutive repeat
+  if (unplayed.length === 0) {
+    playedVideoIds.clear();
+    if (lastPlayedVideoId) {
+      playedVideoIds.add(lastPlayedVideoId);
+    }
+    unplayed = eligibleVideos.filter(
+      (v) => !playedVideoIds.has(v.id) && !playedVideoIds.has(v.src)
+    );
+    if (unplayed.length === 0) {
+      unplayed = eligibleVideos;
+    }
   }
 
-  // Filter out previous video to avoid immediate repeats
-  const filtered = eligibleVideos.filter((v) => v.src !== previousVideoId && v.id !== previousVideoId);
-  const pool = filtered.length > 0 ? filtered : eligibleVideos;
-  const randomIndex = Math.floor(Math.random() * pool.length);
+  // 3. Exclude previousVideoId if more than one option exists
+  if (previousVideoId && unplayed.length > 1) {
+    const withoutPrev = unplayed.filter(
+      (v) => v.id !== previousVideoId && v.src !== previousVideoId
+    );
+    if (withoutPrev.length > 0) {
+      unplayed = withoutPrev;
+    }
+  }
 
-  return pool[randomIndex];
+  const randomIndex = Math.floor(Math.random() * unplayed.length);
+  const selected = unplayed[randomIndex];
+
+  // Mark as played in current cycle
+  playedVideoIds.add(selected.id);
+  playedVideoIds.add(selected.src);
+  lastPlayedVideoId = selected.id;
+
+  return selected;
 }

@@ -1,15 +1,13 @@
-﻿{
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+{
   "rewrites": [
     {
-      "source": "/((?!assets/|wasm/|models/|mocks/|favicon\\.svg|icons\\.svg|siren\\.svg).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
     {
-      "source": "/wasm/(.*)\\.wasm",
+      "source": "/wasm/(.*).wasm",
       "headers": [
         {
           "key": "Content-Type",
@@ -22,7 +20,7 @@
       ]
     },
     {
-      "source": "/wasm/(.*)\\.js",
+      "source": "/wasm/(.*).js",
       "headers": [
         {
           "key": "Content-Type",

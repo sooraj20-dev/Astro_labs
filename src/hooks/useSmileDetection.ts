@@ -61,8 +61,9 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
   const lastVideoIdRef = useRef<string | null>(null);
   const lastLineIdRef = useRef<string | null>(null);
   const lastExpressionRef = useRef<FacialExpression | null>(null);
-  const expressionCooldownRef = useRef<boolean>(false);
   const challengeStartRef = useRef<number>(0);
+  const faceLockedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const smileReactionCooldownRef = useRef<boolean>(false);
 
   // ---------------------------------------------------------------------------
   // 1. ROBUST MEDIAPIPE INITIALIZATION (GPU with automatic CPU Fallback)
@@ -79,7 +80,7 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
         try {
           vision = await FilesetResolver.forVisionTasks(DETECTION_CONFIG.wasmPath);
         } catch (wasmErr) {
-          console.warn('[CHIRI POLICE] Local wasm failed, trying CDN wasm:', wasmErr);
+          console.warn('[ASTRO LAB] Local wasm failed, trying CDN wasm:', wasmErr);
           vision = await FilesetResolver.forVisionTasks(DETECTION_CONFIG.cdnWasmPath);
         }
 
@@ -94,7 +95,7 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
           // Try CPU delegate first for 100% stability across all GPUs and drivers, fallback to GPU
           for (const delegate of ['CPU', 'GPU'] as const) {
             try {
-              console.log(`[CHIRI POLICE] Attempting FaceLandmarker init (${modelPath}, delegate: ${delegate})...`);
+              console.log(`[ASTRO LAB] Attempting FaceLandmarker init (${modelPath}, delegate: ${delegate})...`);
               faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
                 baseOptions: {
                   modelAssetPath: modelPath,
@@ -107,10 +108,10 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
                 minTrackingConfidence: 0.35,
                 outputFaceBlendshapes: true,
               });
-              console.log(`[CHIRI POLICE] FaceLandmarker successfully initialized (${modelPath}, delegate: ${delegate})`);
+              console.log(`[ASTRO LAB] FaceLandmarker successfully initialized (${modelPath}, delegate: ${delegate})`);
               break;
             } catch (err) {
-              console.warn(`[CHIRI POLICE] Init failed for ${modelPath} on ${delegate}:`, err);
+              console.warn(`[ASTRO LAB] Init failed for ${modelPath} on ${delegate}:`, err);
             }
           }
         }
@@ -156,6 +157,8 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
   const fireMockTrigger = useCallback(
     (intensity: SmileIntensity, expression: FacialExpression = 'smile') => {
       if (intensity === 'none') return;
+      // If a reaction video is currently playing, it MUST complete before another can start!
+      if (useSmileStore.getState().isOverlayVideoPlaying) return;
 
       const matchingLines = MOCK_LINES.filter((line) => line.intensity === intensity);
       const unrepeated = matchingLines.filter((l) => l.id !== lastLineIdRef.current);
@@ -172,12 +175,9 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
         resolvedExpr !== 'laughing' &&
         EXPRESSION_METADATA[resolvedExpr]?.videos?.length
       ) {
-        // Specific facial expression video pool (using assets from no_smile, wierd_laugh, etc.)
+        // Specific facial expression video pool
         videoUrl = getRandomExpressionVideo(resolvedExpr, lastVideoIdRef.current);
       } else {
-        // Map smile / laughing to appropriate asset folder category:
-        // - 'wierd_laugh' for intense bursts / laughing
-        // - 'smile' for standard smiles
         const categoryPref = resolvedExpr === 'laughing' ? 'wierd_laugh' : 'smile';
         const mockVideo = selectRandomMockVideo(intensity, lastVideoIdRef.current, categoryPref);
         videoUrl = mockVideo.src;
@@ -209,10 +209,10 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
         clearTimeout(cooldownTimerRef.current);
       }
 
+      // Safety fallback timeout (20s) ONLY in case video stream stalls, normal completion is via onEnded
       cooldownTimerRef.current = setTimeout(() => {
         cooldownRef.current = false;
         setCooldownActive(false);
-
         finishMockPlayback();
 
         if (smoothedScoreRef.current >= DETECTION_CONFIG.resetThreshold) {
@@ -223,7 +223,7 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
           setDetectionState('SERIOUS');
           isSmilingRef.current = false;
         }
-      }, 6000); // 1.4s text mock + ~4s movie dialogue
+      }, 20000);
     },
     [startMockSequence, setCooldownActive, setDetectionState, finishMockPlayback]
   );
@@ -250,23 +250,23 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
         ctx.setLineDash([]);
 
         ctx.fillStyle = '#FFE500';
-        ctx.font = 'bold 12px "JetBrains Mono", monospace';
-        ctx.fillText('[ SCANNING FOR FACES // മുഖം തിരയുന്നു ]', width * 0.2 + 8, height * 0.15 - 8);
+        ctx.font = 'bold 12px "Noto Sans Malayalam", "JetBrains Mono", monospace';
+        ctx.fillText('[ ക്യാമറയിലേക്ക് നോക്കൂ // LOOK AT CAMERA ]', width * 0.2 + 8, height * 0.15 - 8);
         return;
       }
 
-      // Top Multi-Face Police Radar Banner
+      // Top Multi-Face Alert: "ഒരാൾ മാത്രം മതി. ഇത് group project അല്ല."
       if (multipleFaces && faces.length > 1) {
-        const topBanner = `👥 MULTI-FACE MODE: ${faces.length} SUSPECTS MONITORED`;
-        ctx.font = 'bold 11px "JetBrains Mono", monospace';
+        const topBanner = '👥 ഒരാൾ മാത്രം മതി. ഇത് group project അല്ല.';
+        ctx.font = 'bold 12px "Noto Sans Malayalam", "JetBrains Mono", monospace';
         const tbWidth = ctx.measureText(topBanner).width;
         ctx.fillStyle = '#000000';
-        ctx.fillRect(width / 2 - tbWidth / 2 - 12, 10, tbWidth + 24, 24);
+        ctx.fillRect(width / 2 - tbWidth / 2 - 14, 10, tbWidth + 28, 28);
         ctx.strokeStyle = '#FFE500';
         ctx.lineWidth = 2;
-        ctx.strokeRect(width / 2 - tbWidth / 2 - 12, 10, tbWidth + 24, 24);
+        ctx.strokeRect(width / 2 - tbWidth / 2 - 14, 10, tbWidth + 28, 28);
         ctx.fillStyle = '#FFE500';
-        ctx.fillText(topBanner, width / 2 - tbWidth / 2, 26);
+        ctx.fillText(topBanner, width / 2 - tbWidth / 2, 29);
       }
 
       // Render forensic box for EACH detected face
@@ -337,13 +337,18 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
           }
         });
 
-        // 3. Minimal HUD Tag above face box (Individual suspect tracking)
+        // 3. Minimal HUD Tag above face box
+        const curAppPhase = useSmileStore.getState().appPhase;
         ctx.fillStyle = '#000000';
         const labelText = multipleFaces
-          ? `SUSPECT #${f.faceIndex + 1}: ${isFaceAlert ? 'BUSTED! ' + Math.round(f.smileScore) + '%' : Math.round(f.smileScore) + '%'}`
+          ? `FACE #${f.faceIndex + 1}: ${Math.round(f.smileScore)}%`
           : isFaceAlert
-          ? `SMILE ${Math.round(f.smileScore) + '%'}`
-          : `FACE ✓`;
+          ? `SMILE ${Math.round(f.smileScore)}%`
+          : curAppPhase === 'SCANNING'
+          ? `SCANNING...`
+          : curAppPhase === 'RESULT'
+          ? `JATHAKAM READY`
+          : `FACE LOCKED ✓`;
         const textWidth = ctx.measureText(labelText).width;
         ctx.fillRect(boxX, Math.max(0, boxY - 22), textWidth + 14, 20);
         ctx.fillStyle = isFaceAlert ? '#FFE500' : '#FFFFFF';
@@ -450,13 +455,17 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
             try {
               result = landmarker.detectForVideo(video, nowMs);
             } catch (detectErr) {
-              console.warn('[CHIRI POLICE DETECT ERROR]', detectErr);
+              console.warn('[ASTRO LAB DETECT ERROR]', detectErr);
             }
 
             const faceCount = result?.faceLandmarks?.length || 0;
             const multipleFaces = faceCount > 1;
 
             if (faceCount === 0) {
+              if (faceLockedTimerRef.current) {
+                clearTimeout(faceLockedTimerRef.current);
+                faceLockedTimerRef.current = null;
+              }
               if (stateRef.current !== 'IDLE' && stateRef.current !== 'SEARCHING') {
                 stateRef.current = 'SEARCHING';
               }
@@ -552,28 +561,67 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
                 lastExpressionRef.current = null;
               }
 
-              // State Machine Transitions
-              if (cooldownRef.current) {
+              // Check if a reaction video is currently playing:
+              // Once a video plays, it MUST complete before any new reaction can trigger!
+              const isVideoPlaying = useSmileStore.getState().isOverlayVideoPlaying;
+              const curMockMode = useSmileStore.getState().mockMode;
+
+              if (isVideoPlaying) {
+                // Video is actively playing! Do not interrupt with any new mock or reaction.
                 stateRef.current = 'COOLDOWN';
-                if (isBelowReset) {
-                  isSmilingRef.current = false;
-                }
-              } else if (stateRef.current === 'WAITING_RESET' || stateRef.current === 'SMILING') {
-                if (isBelowReset) {
-                  stateRef.current = 'SERIOUS';
-                  isSmilingRef.current = false;
-                  setDetectionState('SERIOUS');
-                }
               } else {
-                // Currently in SERIOUS or IDLE
-                if (isCurrentlySmiling && !isSmilingRef.current) {
-                  isSmilingRef.current = true;
-                  stateRef.current = 'SMILING';
-                  setDetectionState('SMILING');
-                  fireMockTrigger(primaryFace.intensity, primaryFace.expression);
-                } else if (!isCurrentlySmiling) {
-                  stateRef.current = 'SERIOUS';
-                  isSmilingRef.current = false;
+                // State Machine Transitions
+                if (cooldownRef.current) {
+                  stateRef.current = 'COOLDOWN';
+                  if (isBelowReset) {
+                    isSmilingRef.current = false;
+                  }
+                } else if (stateRef.current === 'WAITING_RESET' || stateRef.current === 'SMILING') {
+                  if (isBelowReset) {
+                    stateRef.current = 'SERIOUS';
+                    isSmilingRef.current = false;
+                    setDetectionState('SERIOUS');
+                  }
+                } else if (curMockMode === 'MOVIE') {
+                  // In MOVIE MOCK mode: smile triggers the comedy dialogue reaction
+                  if (isCurrentlySmiling && !isSmilingRef.current) {
+                    isSmilingRef.current = true;
+                    stateRef.current = 'SMILING';
+                    setDetectionState('SMILING');
+                    fireMockTrigger(primaryFace.intensity, primaryFace.expression);
+                  } else if (!isCurrentlySmiling) {
+                    stateRef.current = 'SERIOUS';
+                    isSmilingRef.current = false;
+                  }
+                } else {
+                  // In ASTROLOGY MOCK mode
+                  if (!isCurrentlySmiling) {
+                    stateRef.current = 'SERIOUS';
+                    isSmilingRef.current = false;
+                  }
+                }
+
+                // ASTROLOGY MODE workflow: Auto-trigger scan on stable face lock
+                if (curMockMode === 'ASTROLOGY') {
+                  const curAppPhase = useSmileStore.getState().appPhase;
+                  if (curAppPhase === 'WAITING_FACE' && !multipleFaces) {
+                    if (!faceLockedTimerRef.current) {
+                      faceLockedTimerRef.current = setTimeout(() => {
+                        faceLockedTimerRef.current = null;
+                        if (useSmileStore.getState().appPhase === 'WAITING_FACE' && useSmileStore.getState().faceDetected) {
+                          useSmileStore.getState().startScanSequence();
+                        }
+                      }, 450);
+                    }
+                  } else if (curAppPhase === 'RESULT') {
+                    if (isCurrentlySmiling && !smileReactionCooldownRef.current) {
+                      smileReactionCooldownRef.current = true;
+                      useSmileStore.getState().triggerSmileReaction(primaryFace.rawScore);
+                      setTimeout(() => {
+                        smileReactionCooldownRef.current = false;
+                      }, 6000);
+                    }
+                  }
                 }
               }
 
@@ -650,6 +698,10 @@ export function useSmileDetection({ videoRef, canvasRef }: UseSmileDetectionProp
       if (cooldownTimerRef.current) {
         clearTimeout(cooldownTimerRef.current);
         cooldownTimerRef.current = null;
+      }
+      if (faceLockedTimerRef.current) {
+        clearTimeout(faceLockedTimerRef.current);
+        faceLockedTimerRef.current = null;
       }
     };
   }, [

@@ -43,7 +43,7 @@ export function captureMemeSnapshot(
 
   ctx.fillStyle = '#FFE500';
   ctx.font = 'bold 12px monospace';
-  ctx.fillText(`CHIRI // ${smileTypeMl.toUpperCase()}`, 20, 31);
+  ctx.fillText(`ASTRO LAB // ${smileTypeMl.toUpperCase()}`, 20, 31);
 
   // Teeth Tag
   if (teethCount > 0) {
@@ -69,14 +69,14 @@ export function captureMemeSnapshot(
 
   ctx.font = 'bold 11px monospace';
   ctx.fillText(
-    `CHIRI METER: ${Math.round(smileScore)}% • പല്ല്: ${teethCount}/32 • ${smileTypeMl}`,
+    `ASTRO METER: ${Math.round(smileScore)}% • പല്ല്: ${teethCount}/32 • ${smileTypeMl}`,
     vWidth / 2,
     vHeight + 85
   );
 
   // Download Image
   const link = document.createElement('a');
-  link.download = `chiri-meme-${Date.now()}.png`;
+  link.download = `astro-lab-${Date.now()}.png`;
   link.href = canvas.toDataURL('image/png');
   link.click();
 }
