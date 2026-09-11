@@ -103,28 +103,6 @@ Open `http://localhost:5173` in your browser and grant camera access when prompt
 
 ---
 
-### For Hardware:
-*(N/A - Pure Software Application)*
-
-#### Schematic & Circuit
-![Circuit](https://raw.githubusercontent.com/sooraj20-dev/Chiri/main/public/favicon.svg)  
-*N/A - Software-only application (Client browser connects directly to local device camera via WebRTC MediaStreams).*
-
-#### Schematic
-![Schematic](https://raw.githubusercontent.com/sooraj20-dev/Chiri/main/public/favicon.svg)  
-*N/A - Software-only architecture.*
-
-#### Build Photos
-![Components](https://raw.githubusercontent.com/sooraj20-dev/Chiri/main/public/favicon.svg)  
-*List of components: Display monitor, HD Webcam, and User Face.*
-
-![Build](https://raw.githubusercontent.com/sooraj20-dev/Chiri/main/public/favicon.svg)  
-*Build process: Pure React 19 + TypeScript build running entirely client-side.*
-
-![Final](https://raw.githubusercontent.com/sooraj20-dev/Chiri/main/public/favicon.svg)  
-*Final build: Complete Astro Lab interface running locally in the browser.*
-
----
 
 ## Project Demo
 
