@@ -60,8 +60,8 @@ Astro Lab turns your webcam into an authentic Kerala astrology chamber (*ജ്�
 
 #### Installation
 ```bash
-git clone https://github.com/sooraj20-dev/Chiri.git
-cd Chiri
+git clone https://github.com/sooraj20-dev/Astro_labs.git
+cd Astro_labs
 npm install
 ```
 
